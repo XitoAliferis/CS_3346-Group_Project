@@ -215,5 +215,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-Data/Test/*.jsonl
-Data/Train/*.jsonl
+#Data/Test/*.jsonl
+#Data/Train/*.jsonl

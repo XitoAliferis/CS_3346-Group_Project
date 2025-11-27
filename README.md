@@ -20,12 +20,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ### 3. Install required packages
 ```powershell
-pip install "numpy<2"
-pip install transformers==4.57.3
-pip install peft optuna
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-pip install datasets
-pip install evaluate
+pip install -r requirements.txt
 ```
 
 ### 4. Run baselines
