@@ -7,13 +7,17 @@ test_dir = './Data/Test/'
 
 print('loading training data')
 hanoi_train_data = load_jsonl(train_dir + 'towers_hanoi_train')
+fib_train_data   = load_jsonl(train_dir + 'fibonacci_train')
 
 print('loading test data')
 hanoi_test_data = load_jsonl(test_dir + 'towers_hanoi_test')
-
+fib_test_data   = load_jsonl(test_dir + 'fibonacci_test')
 
 hanoi_train_data = Dataset.from_list(hanoi_train_data)
 hanoi_test_data = Dataset.from_list(hanoi_test_data)
+
+fib_train_ds = Dataset.from_list(fib_train_data)
+fib_test_ds  = Dataset.from_list(fib_test_data)
 
 print('creating Qwen5B')
 model = Qwen5B()
@@ -31,6 +35,21 @@ print("Base model metrics:", metrics_base)
 
 print("HF Token-Level Accuracy:", metrics_base.get("eval_accuracy"))
 print("Sequence-Level Accuracy:", metrics_base.get("accuracy"))
+
+
+print('creating train and val folds for Fibonacci')
+fib_train_folds, fib_val_folds = model.create_folds(
+    fib_train_ds, n_folds=5, seed=42
+)
+
+print('evaluating base Qwen5B on Fibonacci')
+metrics_base_fib = model.evaluate_base_model(fib_test_ds, "fibonacci_test_base")
+
+print("Base model metrics (Fibonacci):", metrics_base_fib)
+print("HF Token-Level Accuracy (Fibonacci):", metrics_base_fib.get("eval_accuracy"))
+print("Sequence-Level Accuracy (Fibonacci):", metrics_base_fib.get("accuracy"))
+
+
 
 '''
 # --------------------------
