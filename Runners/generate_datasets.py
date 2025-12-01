@@ -1,5 +1,6 @@
 from Classes.Generators.HanoiGame import generate_hanoi_dataset
 from Classes.Generators.FibonacciGame import generate_fibonacci_dataset
+from Classes.Generators.SlidingPuzzleGame import generate_sliding_puzzle_dataset
 from Classes.Utils.data_utils import save_jsonl
 
 train_data, test_data = generate_hanoi_dataset(
@@ -32,3 +33,20 @@ fib_train, fib_test = generate_fibonacci_dataset(
 
 save_jsonl(fib_train, "../Data/Train/fibonacci_train")
 save_jsonl(fib_test, "../Data/Test/fibonacci_test")
+
+
+sliding_train, sliding_test = generate_sliding_puzzle_dataset(
+    num_examples=100,
+    board_size=3,
+    min_scramble_moves=10,
+    max_scramble_moves=30,
+    min_future_steps=1,
+    max_future_steps=6,
+    num_shots=0,
+    num_fewshot_examples=3,
+    test_fraction=0.1,
+    seed=7,
+)
+
+save_jsonl(sliding_train, "../Data/Train/sliding_puzzle_train")
+save_jsonl(sliding_test, "../Data/Test/sliding_puzzle_test")
