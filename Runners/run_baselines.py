@@ -1,69 +1,76 @@
 from Classes.Models.qwen5b import Qwen5B
 from Classes.Utils.data_utils import load_jsonl
 from datasets import Dataset
+import os
 
 train_dir = './Data/Train/'
-test_dir = './Data/Test/'
+test_dir  = './Data/Test/'
 
-print('loading training data')
-hanoi_train_data = load_jsonl(train_dir + 'towers_hanoi_train')
-fib_train_data   = load_jsonl(train_dir + 'fibonacci_train')
-sliding_train_data = load_jsonl(train_dir + 'sliding_puzzle_train')
+# game list
+TASKS = {
+    "hanoi": {
+        "train": "towers_hanoi_train",
+        "test":  "towers_hanoi_test",
+    },
+    "fibonacci": {
+        "train": "fibonacci_train",
+        "test":  "fibonacci_test",
+    },
+    "sliding": {
+        "train": "sliding_puzzle_train",
+        "test":  "sliding_puzzle_test",
+    }
+}
 
-print('loading test data')
-hanoi_test_data = load_jsonl(test_dir + 'towers_hanoi_test')
-fib_test_data   = load_jsonl(test_dir + 'fibonacci_test')
-sliding_test_data = load_jsonl(test_dir + 'sliding_puzzle_test')
 
-hanoi_train_data = Dataset.from_list(hanoi_train_data)
-hanoi_test_data = Dataset.from_list(hanoi_test_data)
+def load_dataset(path):
+    return Dataset.from_list(load_jsonl(path))
 
-fib_train_ds = Dataset.from_list(fib_train_data)
-fib_test_ds  = Dataset.from_list(fib_test_data)
-sliding_train_ds = Dataset.from_list(sliding_train_data)
-sliding_test_ds  = Dataset.from_list(sliding_test_data)
 
-print('creating Qwen5B')
+train_sets = {}
+test_sets  = {}
+
+print("Loading datasets...")
+
+# load individual datasets
+for task, files in TASKS.items():
+    train_path = os.path.join(train_dir, files["train"])
+    test_path  = os.path.join(test_dir,  files["test"])
+
+    print(f"  • Loading {task} train/test")
+    train_sets[task] = load_dataset(train_path)
+    test_sets[task]  = load_dataset(test_path)
+
+# intialize model (qwen 5b in this case)
+print("\nCreating Qwen5B")
 model = Qwen5B()
 
+# the task loop itself (create folds, evaluate base model, get metrics)
+def process_task(task_name, train_ds, test_ds):
+    print(f"\n=== Processing task: {task_name} ===")
 
-print('creating train and val folds')
-train_folds, val_folds = model.create_folds(hanoi_train_data, n_folds=5, seed=42)
+    print("Creating train/val folds")
+    train_folds, val_folds = model.create_folds(
+        train_ds, n_folds=5, seed=42
+    )
 
+    print("Evaluating base model")
+    metrics = model.evaluate_base_model(
+        test_ds,
+        f"{task_name}_test_base"
+    )
 
-print('evaluating base Qwen5B')
-metrics_base = model.evaluate_base_model(hanoi_test_data, "hanoi_test_base")
+    print("Base model metrics:", metrics)
+    print("HF Token-Level Accuracy:", metrics.get("eval_accuracy"))
+    print("Sequence-Level Accuracy:", metrics.get("accuracy"))
 
-print("Base model metrics:", metrics_base)
+    return metrics
 
+results = {}
 
-print("HF Token-Level Accuracy:", metrics_base.get("eval_accuracy"))
-print("Sequence-Level Accuracy:", metrics_base.get("accuracy"))
-
-
-print('creating train and val folds for Fibonacci')
-fib_train_folds, fib_val_folds = model.create_folds(
-    fib_train_ds, n_folds=5, seed=42
-)
-
-print('evaluating base Qwen5B on Fibonacci')
-metrics_base_fib = model.evaluate_base_model(fib_test_ds, "fibonacci_test_base")
-
-print("Base model metrics (Fibonacci):", metrics_base_fib)
-print("HF Token-Level Accuracy (Fibonacci):", metrics_base_fib.get("eval_accuracy"))
-print("Sequence-Level Accuracy (Fibonacci):", metrics_base_fib.get("accuracy"))
-
-print('creating train and val folds for Sliding Puzzle')
-sliding_train_folds, sliding_val_folds = model.create_folds(
-    sliding_train_ds, n_folds=5, seed=42
-)
-
-print('evaluating base Qwen5B on Sliding Puzzle')
-metrics_base_sliding = model.evaluate_base_model(sliding_test_ds, "sliding_test_base")
-
-print("Base model metrics (Sliding):", metrics_base_sliding)
-print("HF Token-Level Accuracy (Sliding):", metrics_base_sliding.get("eval_accuracy"))
-print("Sequence-Level Accuracy (Sliding):", metrics_base_sliding.get("accuracy"))
+# run task loop
+for task in TASKS:
+    results[task] = process_task(task, train_sets[task], test_sets[task])
 
 
 

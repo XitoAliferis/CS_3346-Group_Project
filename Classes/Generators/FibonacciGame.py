@@ -40,65 +40,83 @@ class FibonacciGame:
         num_shots: int = 0,
         fewshot_examples: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """
-        Creates a single example:
-        - prompt: prefix of Fibonacci seq + instruction
-        - target: next horizon_k Fibonacci numbers, one per line
-        """
 
-        # prefix includes element at start_idx (sequence up to "current" term)
         prefix = full_seq[: start_idx + 1]
         future = full_seq[start_idx + 1 : start_idx + 1 + horizon_k]
 
         prefix_text = self.seq_to_text(prefix)
         target_text = self.target_to_text(future)
 
-        # ---- FEWSHOT SECTION ----
+        # ---- FEWSHOT (inside chat format) ----
         fewshot_blocks: List[str] = []
         if num_shots > 0 and fewshot_examples:
             k = min(num_shots, len(fewshot_examples))
             demos = random.sample(fewshot_examples, k)
 
             for demo in demos:
-                block = (
-                    "Example:\n"
+                demo_block = (
+                    "<|im_start|>user\n"
                     "Fibonacci sequence prediction.\n"
-                    f"Sequence so far:\n{demo['prefix_text']}\n\n"
-                    f"Next {demo['future_steps']} Fibonacci numbers:\n"
-                    f"{demo['target_text']}\n\n"
+                    f"Sequence so far:\n{demo['prefix_text']}\n"
+                    f"Provide the next {demo['future_steps']} numbers.\n"
+                    "STRICT OUTPUT FORMAT (MANDATORY):\n"
+                    "---------------------------------\n"
+                    "You MUST output:\n"
+                    f"- EXACTLY {demo['future_steps']} lines\n"
+                    "- NOTHING except integers\n"
+                    "- Each line MUST contain a single integer (no spaces)\n"
+                    "- No English words\n"
+                    "- No explanations\n"
+                    "- No blank lines\n"
+                    "- No punctuation\n"
+                    "- No numbering\n\n"
+                    f"Any deviation from the required {demo['future_steps']} lines is INVALID.\n"
+                    "<|im_end|>\n"
+                    "<|im_start|>assistant\n"
+                    f"{demo['target_text']}\n"
+                    "<|im_end|>\n"
                 )
-                fewshot_blocks.append(block)
+                fewshot_blocks.append(demo_block)
 
         fewshot_section = "".join(fewshot_blocks)
 
-        # ---- PROMPT ----
-        prompt = (
-            f"{fewshot_section}"
-            f"Now solve this new instance.\n"
-            f"You are given the beginning of a Fibonacci-like sequence.\n"
-            f"Sequence so far (from left to right):\n"
+        # ---- MAIN PROMPT (user turn) ----
+        user_prompt = (
+            "Now solve this new instance.\n"
+            "You are given the beginning of a Fibonacci-like sequence.\n"
+            "Sequence so far (from left to right):\n"
             f"{prefix_text}\n\n"
             f"Provide the next {horizon_k} numbers in the sequence.\n\n"
-            f"STRICT OUTPUT FORMAT (MANDATORY):\n"
-            f"---------------------------------\n"
-            f"You MUST output:\n"
+            "STRICT OUTPUT FORMAT (MANDATORY):\n"
+            "---------------------------------\n"
+            "You MUST output:\n"
             f"- EXACTLY {horizon_k} lines\n"
-            f"- NOTHING except integers\n"
-            f"- Each line MUST contain a single integer (no spaces)\n"
-            f"- No English words\n"
-            f"- No explanations\n"
-            f"- No blank lines\n"
-            f"- No punctuation\n"
-            f"- No numbering\n\n"
+            "- NOTHING except integers\n"
+            "- Each line MUST contain a single integer (no spaces)\n"
+            "- No English words\n"
+            "- No explanations\n"
+            "- No blank lines\n"
+            "- No punctuation\n"
+            "- No numbering\n\n"
             f"Any deviation from the required {horizon_k} lines is INVALID.\n"
         )
+
+        prompt = (
+            f"{fewshot_section}"
+            "<|im_start|>user\n"
+            f"{user_prompt}"
+            "<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+
+        target = f"{target_text}\n<|im_end|>"
 
         return {
             "total_terms": len(full_seq),
             "start_idx": start_idx,
             "future_steps": horizon_k,
             "prompt": prompt,
-            "target": target_text,
+            "target": target,
         }
 
 

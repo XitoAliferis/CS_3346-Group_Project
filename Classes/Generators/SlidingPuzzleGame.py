@@ -138,7 +138,6 @@ class SlidingPuzzleGame:
     def moves_to_text(self, moves: List[Move]) -> str:
         return "\n".join(moves)
 
-    # example builder 
     def make_example(
         self,
         start_state: Tuple[int, ...],
@@ -155,38 +154,65 @@ class SlidingPuzzleGame:
         state_text = self.state_to_text(current_state)
         moves_text = self.moves_to_text(future_moves)
 
+        # ---- FEWSHOT (chat formatted) ----
         fewshot_blocks: List[str] = []
         if num_shots > 0 and fewshot_examples:
             k = min(num_shots, len(fewshot_examples))
             demos = random.sample(fewshot_examples, k)
             for demo in demos:
-                block = (
-                    "Example:\n"
+                demo_user = (
                     f"{demo['board_size']}x{demo['board_size']} sliding puzzle.\n"
+                    "The goal state has the blank '_' in the bottom-right corner and numbers in order.\n"
                     f"Current board:\n{demo['state_text']}\n\n"
-                    f"Next {demo['future_steps']} optimal moves:\n"
-                    f"{demo['moves_text']}\n\n"
+                    f"Provide the next {demo['future_steps']} optimal moves toward the goal.\n\n"
+                    "STRICT OUTPUT FORMAT (MANDATORY):\n"
+                    "---------------------------------\n"
+                    "You MUST output:\n"
+                    f"- EXACTLY {demo['future_steps']} lines\n"
+                    "- ONLY the words: UP, DOWN, LEFT, or RIGHT\n"
+                    "- One move per line\n"
+                    "- No extra text, no punctuation, no numbering, no blank lines\n\n"
+                    f"Any deviation from the required {demo['future_steps']} lines is INVALID.\n"
+                )
+
+                block = (
+                    "<|im_start|>user\n"
+                    f"{demo_user}"
+                    "<|im_end|>\n"
+                    "<|im_start|>assistant\n"
+                    f"{demo['moves_text']}\n"
+                    "<|im_end|>\n"
                 )
                 fewshot_blocks.append(block)
 
         fewshot_section = "".join(fewshot_blocks)
 
-        prompt = (
-            f"{fewshot_section}"
-            f"Now solve this new instance.\n"
+        # ---- MAIN USER PROMPT (chat formatted) ----
+        user_prompt = (
+            "Now solve this new instance.\n"
             f"You are solving a {self.board_size}x{self.board_size} sliding puzzle.\n"
-            f"The goal state has the blank '_' in the bottom-right corner and numbers in order.\n"
+            "The goal state has the blank '_' in the bottom-right corner and numbers in order.\n"
             f"Current board:\n{state_text}\n\n"
             f"Provide the next {horizon_k} optimal moves toward the goal.\n\n"
-            f"STRICT OUTPUT FORMAT (MANDATORY):\n"
-            f"---------------------------------\n"
-            f"You MUST output:\n"
+            "STRICT OUTPUT FORMAT (MANDATORY):\n"
+            "---------------------------------\n"
+            "You MUST output:\n"
             f"- EXACTLY {horizon_k} lines\n"
-            f"- ONLY the words: UP, DOWN, LEFT, or RIGHT\n"
-            f"- One move per line\n"
-            f"- No extra text, no punctuation, no numbering, no blank lines\n\n"
+            "- ONLY the words: UP, DOWN, LEFT, or RIGHT\n"
+            "- One move per line\n"
+            "- No extra text, no punctuation, no numbering, no blank lines\n\n"
             f"Any deviation from the required {horizon_k} lines is INVALID.\n"
         )
+
+        prompt = (
+            f"{fewshot_section}"
+            "<|im_start|>user\n"
+            f"{user_prompt}"
+            "<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+
+        target = f"{moves_text}\n<|im_end|>"
 
         return {
             "board_size": self.board_size,
@@ -194,7 +220,7 @@ class SlidingPuzzleGame:
             "future_steps": horizon_k,
             "scrambled_steps": len(solution_moves),
             "prompt": prompt,
-            "target": moves_text,
+            "target": target,
         }
 
 

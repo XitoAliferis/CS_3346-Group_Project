@@ -4,7 +4,7 @@ from Classes.Generators.SlidingPuzzleGame import generate_sliding_puzzle_dataset
 from Classes.Utils.data_utils import save_jsonl
 
 train_data, test_data = generate_hanoi_dataset(
-    num_examples=100,
+    num_examples=50,
     min_disks=3,
     max_disks=8,
     min_future_steps=1,
@@ -18,9 +18,9 @@ train_data, test_data = generate_hanoi_dataset(
 save_jsonl(train_data, "../Data/Train/towers_hanoi_train")
 save_jsonl(test_data, "../Data/Test/towers_hanoi_test")
 
-
+'''
 fib_train, fib_test = generate_fibonacci_dataset(
-    num_examples=100,
+    num_examples=50,
     min_terms=10,
     max_terms=40,
     min_future_steps=1,
@@ -36,7 +36,7 @@ save_jsonl(fib_test, "../Data/Test/fibonacci_test")
 
 
 sliding_train, sliding_test = generate_sliding_puzzle_dataset(
-    num_examples=100,
+    num_examples=50,
     board_size=3,
     min_scramble_moves=10,
     max_scramble_moves=30,
@@ -50,3 +50,4 @@ sliding_train, sliding_test = generate_sliding_puzzle_dataset(
 
 save_jsonl(sliding_train, "../Data/Train/sliding_puzzle_train")
 save_jsonl(sliding_test, "../Data/Test/sliding_puzzle_test")
+'''

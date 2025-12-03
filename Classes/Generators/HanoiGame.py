@@ -1,4 +1,3 @@
-# imports 
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional
@@ -13,7 +12,8 @@ class HanoiGame:
     max_disks: int = 8
     peg_labels: Tuple[str, str, str] = ("A", "B", "C")
 
-    # generating the optimal moves to move the tower of n_disks from the src position to the dst position using the aux peg
+    # generating the optimal moves to move the tower of n_disks from the src
+    # position to the dst position using the aux peg
     # returns: a list of (from peg, to peg)
     # based off this: https://www.geeksforgeeks.org/dsa/c-program-for-tower-of-hanoi/
     def generate_optimal_moves(
@@ -38,14 +38,13 @@ class HanoiGame:
     # builds a state sequence, which simulates the pegs over time given the move list
     # inputs number of disks, moves, and the source peg
     # returns the states at index i, the states after applying i moves
-    # and the state[0] which is the intial config 
+    # and the state[0] which is the intial config
     def build_state_sequence(
         self,
         n_disks: int,
         moves: List[Tuple[int, int]],
         src: int,
     ) -> List[List[List[int]]]:
-
         # pegs as lists of disks, bottom -> top.
         pegs: List[List[int]] = [[], [], []]
         pegs[src] = list(range(n_disks, 0, -1))  # all disks on source peg
@@ -82,11 +81,10 @@ class HanoiGame:
     # makes a single example based on the params defined
     # makes the prompt which is a text description of the current state + an instruction
     # allows for oneshot or fewshot examples too
-    #   zero-shot -> num_shots = 0 
-    #   one-shot  -> num_shots = 1 
-    #   few-shot  -> num_shots > 1 
+    # zero-shot -> num_shots = 0
+    # one-shot -> num_shots = 1
+    # few-shot -> num_shots > 1
     # target is the next K moves (optimal) and it is printed once per line as "X->Y"
-
     def make_example(
         self,
         n_disks: int,
@@ -100,65 +98,91 @@ class HanoiGame:
         num_shots: int = 0,
         fewshot_examples: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-
         # get current state & upcoming moves
         current_state = states[start_idx]
         future_moves = moves[start_idx : start_idx + horizon_k]
 
         query_state_text = self.state_to_text(current_state)
         query_moves_text = self.moves_to_text(future_moves)
-
-        src_label = self.peg_labels[src]
         dst_label = self.peg_labels[dst]
 
-        # ---- FEWSHOT ----
-        fewshot_blocks = []
+        # ---- FEWSHOT (chat formatted) ----
+        fewshot_blocks: List[str] = []
         if num_shots > 0 and fewshot_examples:
             k = min(num_shots, len(fewshot_examples))
             demo_samples = random.sample(fewshot_examples, k)
-
             for demo in demo_samples:
-                demo_src_label = self.peg_labels[demo["src"]]
                 demo_dst_label = self.peg_labels[demo["dst"]]
+                demo_user = (
+                    "You are solving the Towers of Hanoi puzzle.\n"
+                    f"Number of disks: {demo['n_disks']}.\n"
+                    f"The goal is to move all disks to peg {demo_dst_label}.\n"
+                    f"The pegs are labeled {', '.join(self.peg_labels)}.\n\n"
+                    f"Current configuration:\n{demo['state_text']}\n\n"
+                    f"Provide the next {demo['future_steps']} optimal moves.\n\n"
+                    "STRICT OUTPUT FORMAT (MANDATORY):\n"
+                    "---------------------------------\n"
+                    "You MUST output:\n"
+                    f"- EXACTLY {demo['future_steps']} lines\n"
+                    "- NOTHING except moves\n"
+                    "- Each line MUST match the regex: ^[A-C]->[A-C]$\n"
+                    "- No English words\n"
+                    "- No explanations\n"
+                    "- No punctuation except '->'\n"
+                    "- No blank lines\n"
+                    "- No numbering\n"
+                    "- No spaces before or after\n"
+                    "- No commentary\n\n"
+                    f"Any deviation from the required {demo['future_steps']} lines is INVALID.\n"
+                )
 
-                # FEWSHOT IS NOW STRICT — GOOD FOR TRAINING
                 block = (
-                    f"Example:\n"
-                    f"Puzzle with {demo['n_disks']} disks. Goal = peg {demo_dst_label}.\n"
-                    f"State:\n{demo['state_text']}\n\n"
-                    f"Next {demo['future_steps']} optimal moves:\n"
-                    f"{demo['moves_text']}\n\n"
+                    "<|im_start|>user\n"
+                    f"{demo_user}"
+                    "<|im_end|>\n"
+                    "<|im_start|>assistant\n"
+                    f"{demo['moves_text']}\n"
+                    "<|im_end|>\n"
                 )
                 fewshot_blocks.append(block)
 
         fewshot_section = "".join(fewshot_blocks)
 
-        # ---- STRICT FORMAT PROMPT ----
-        prompt = (
-            f"{fewshot_section}"
-            f"Now solve this new instance.\n"
+        # ---- MAIN USER PROMPT (chat formatted) ----
+        user_prompt = (
+            "Now solve this new instance.\n"
             f"You are solving the Towers of Hanoi puzzle with {n_disks} disks.\n"
             f"The goal is to move all disks to peg {dst_label}.\n"
             f"The pegs are labeled {', '.join(self.peg_labels)}.\n\n"
             f"Current configuration:\n{query_state_text}\n\n"
             f"Provide the next {horizon_k} optimal moves.\n\n"
-            f"STRICT OUTPUT FORMAT (MANDATORY):\n"
-            f"---------------------------------\n"
-            f"You MUST output:\n"
+            "STRICT OUTPUT FORMAT (MANDATORY):\n"
+            "---------------------------------\n"
+            "You MUST output:\n"
             f"- EXACTLY {horizon_k} lines\n"
-            f"- NOTHING except moves\n"
-            f"- Each line MUST match the regex: ^[A-C]->[A-C]$\n"
-            f"- No English words\n"
-            f"- No explanations\n"
-            f"- No punctuation except '->'\n"
-            f"- No blank lines\n"
-            f"- No numbering\n"
-            f"- No spaces before or after\n"
-            f"- No commentary\n\n"
+            "- NOTHING except moves\n"
+            "- Each line MUST match the regex: ^[A-C]->[A-C]$\n"
+            "- No English words\n"
+            "- No explanations\n"
+            "- No punctuation except '->'\n"
+            "- No blank lines\n"
+            "- No numbering\n"
+            "- No spaces before or after\n"
+            "- No commentary\n\n"
             f"Any deviation from the required {horizon_k} lines is INVALID.\n"
         )
 
-        target = query_moves_text
+        # FULL CHAT-FORMAT PROMPT
+        prompt = (
+            f"{fewshot_section}"
+            "<|im_start|>user\n"
+            f"{user_prompt}"
+            "<|im_end|>\n"
+            "<|im_start|>assistant\n"
+        )
+
+        # Target: model should generate ONLY these lines + end marker
+        target = f"{query_moves_text}\n<|im_end|>"
 
         return {
             "n_disks": n_disks,
@@ -172,13 +196,16 @@ class HanoiGame:
             "target": target,
         }
 
+
 # generate the entire dataset
-# input params include the total examples produced, the min and max disks, min and max steps, number of shots (examples in the prompt), and the seed
+# input params include the total examples produced, the min and max disks, min and max steps,
+# number of shots (examples in the prompt), and the seed
 # returns the full dataset
 # notes
-#  - each row shows a current state, asks for K next moves and the label is the next K moves as "X->Y" lines
-#  - no two rows share the same config (defined as the combination of: n_disks, src, dst, aux, start_step, future_steps)
-#  - if there are shots (examples), we create them first and ensure they never appear in the dataset (avoiding leakage)
+# - each row shows a current state, asks for K next moves and the label is the next K moves as "X->Y" lines
+# - no two rows share the same config (defined as the combination of:
+#   n_disks, src, dst, aux, start_step, future_steps)
+# - if there are shots (examples), we create them first and ensure they never appear in the dataset (avoiding leakage)
 def generate_hanoi_dataset(
     num_examples: int,
     min_disks: int = 2,
@@ -194,19 +221,20 @@ def generate_hanoi_dataset(
     game = HanoiGame(min_disks=min_disks, max_disks=max_disks)
 
     examples: List[Dict[str, Any]] = []  # all rows
-    seen_keys = set()   # keys for dataset rows (n_disks, src, dst, aux, start_idx, horizon_k)
-    demo_keys = set()   # keys reserved for few-shot demos
+    seen_keys = set()  # keys for dataset rows (n_disks, src, dst, aux, start_idx, horizon_k)
+    demo_keys = set()  # keys reserved for few-shot demos
 
     # cache: (n_disks, src, dst, aux) -> (moves, states)
-    cache: Dict[Tuple[int, int, int, int], Tuple[List[Tuple[int, int]], List[List[List[int]]]]] = {}
+    cache: Dict[
+        Tuple[int, int, int, int],
+        Tuple[List[Tuple[int, int]], List[List[List[int]]]],
+    ] = {}
 
     # ---------- build few-shot pool (if needed) ----------
     fewshot_examples: List[Dict[str, Any]] = []
-
     if num_shots > 0:
         attempts = 0
         max_attempts = num_fewshot_examples * 50
-
         while len(fewshot_examples) < num_fewshot_examples and attempts < max_attempts:
             attempts += 1
 
@@ -219,7 +247,6 @@ def generate_hanoi_dataset(
             aux = next(i for i in peg_idxs if i not in (src, dst))
 
             cache_key = (n_disks, src, dst, aux)
-
             if cache_key not in cache:
                 moves = game.generate_optimal_moves(n_disks, src=src, dst=dst, aux=aux)
                 states = game.build_state_sequence(n_disks, moves, src=src)
@@ -233,12 +260,12 @@ def generate_hanoi_dataset(
 
             max_k_allowed = min(max_future_steps, total_moves)
             horizon_k = rng.randint(min_future_steps, max_k_allowed)
-
             max_start = total_moves - horizon_k
             if max_start < 0:
                 continue
 
             start_idx = rng.randint(0, max_start)
+
             key = (n_disks, src, dst, aux, start_idx, horizon_k)
             if key in demo_keys:
                 continue
@@ -269,7 +296,6 @@ def generate_hanoi_dataset(
     # ---------- generate main dataset ----------
     attempts = 0
     max_attempts = num_examples * 50
-
     while len(examples) < num_examples and attempts < max_attempts:
         attempts += 1
 
@@ -282,7 +308,6 @@ def generate_hanoi_dataset(
         aux = next(i for i in peg_idxs if i not in (src, dst))
 
         cache_key = (n_disks, src, dst, aux)
-
         if cache_key not in cache:
             moves = game.generate_optimal_moves(n_disks, src=src, dst=dst, aux=aux)
             states = game.build_state_sequence(n_disks, moves, src=src)
@@ -296,17 +321,15 @@ def generate_hanoi_dataset(
 
         max_k_allowed = min(max_future_steps, total_moves)
         horizon_k = rng.randint(min_future_steps, max_k_allowed)
-
         max_start = total_moves - horizon_k
         if max_start < 0:
             continue
+
         start_idx = rng.randint(0, max_start)
 
         key = (n_disks, src, dst, aux, start_idx, horizon_k)
-
         if key in seen_keys or key in demo_keys:
             continue
-
         seen_keys.add(key)
 
         ex = game.make_example(
@@ -336,10 +359,10 @@ def generate_hanoi_dataset(
 
     indices = list(range(n_total))
     rng.shuffle(indices)
-
     test_idx = set(indices[:n_test])
+
     train_examples = [examples[i] for i in range(n_total) if i not in test_idx]
-    test_examples  = [examples[i] for i in range(n_total) if i in test_idx]
+    test_examples = [examples[i] for i in range(n_total) if i in test_idx]
 
     # sanity
     assert len(train_examples) == n_train
