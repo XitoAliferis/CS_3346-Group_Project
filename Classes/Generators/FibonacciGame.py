@@ -128,13 +128,22 @@ def generate_fibonacci_dataset(
     max_future_steps: int = 8,
     num_shots: int = 0,
     num_fewshot_examples: int = 3,
-    test_fraction: float = 0.1,
+    test_size: int = 300,
+    size_x: int = 500,
+    size_y: int = 1500,
+    size_z: int = 3000,
     seed: int = 0,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> Tuple[
+    List[Dict[str, Any]],  # test set
+    List[Dict[str, Any]],  # set x
+    List[Dict[str, Any]],  # set y
+    List[Dict[str, Any]],  # set z
+]:
     """
     Similar design as generate_hanoi_dataset, but for Fibonacci:
     - Each row: prefix of sequence, ask for next K terms
     - Label: next K terms, one per line
+    - Difficulty bucket: (total_terms, future_steps)
     - Uniqueness defined by (total_terms, start_idx, horizon_k)
     """
     rng = random.Random(seed)
@@ -243,19 +252,79 @@ def generate_fibonacci_dataset(
             f"out of requested {num_examples}."
         )
 
-    # -------- TRAIN / TEST SPLIT --------
-    n_total = len(examples)
-    n_test = max(1, int(round(n_total * test_fraction)))
-    n_train = n_total - n_test
+    # -------- STRATIFIED SPLIT BY DIFFICULTY (total_terms, future_steps) --------
+    def stratified_split(
+        examples: List[Dict[str, Any]],
+        test_size: int,
+        size_x: int,
+        size_y: int,
+        size_z: int,
+        rng: random.Random,
+    ):
+        total_needed = test_size + size_x + size_y + size_z
+        assert total_needed <= len(examples), (
+            "Requested split sizes exceed dataset size: "
+            f"needed={total_needed}, available={len(examples)}"
+        )
 
-    indices = list(range(n_total))
-    rng.shuffle(indices)
+        # bucket by (sequence length, horizon) as difficulty proxy
+        buckets: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+        for ex in examples:
+            key = (ex["total_terms"], ex["future_steps"])
+            buckets.setdefault(key, []).append(ex)
 
-    test_idx = set(indices[:n_test])
-    train_examples = [examples[i] for i in range(n_total) if i not in test_idx]
-    test_examples = [examples[i] for i in range(n_total) if i in test_idx]
+        for key in buckets:
+            rng.shuffle(buckets[key])
 
-    assert len(train_examples) == n_train
-    assert len(test_examples) == n_test
+        splits = {
+            "test": [],
+            "x": [],
+            "y": [],
+            "z": [],
+        }
+        remaining = {
+            "test": test_size,
+            "x": size_x,
+            "y": size_y,
+            "z": size_z,
+        }
 
-    return train_examples, test_examples
+        def total_remaining():
+            return sum(remaining.values())
+
+        # spread each bucket across the four splits
+        for key, ex_list in buckets.items():
+            if total_remaining() == 0:
+                break
+            for ex in ex_list:
+                if total_remaining() == 0:
+                    break
+                candidates = [s for s, r in remaining.items() if r > 0]
+                if not candidates:
+                    break
+                # greedy largest-remaining allocation (matches Hanoi for consistency)
+                best_split = max(candidates, key=lambda s: remaining[s])
+                splits[best_split].append(ex)
+                remaining[best_split] -= 1
+
+        # sanity checks
+        assert len(splits["test"]) == test_size, "test_size mismatch"
+        assert len(splits["x"]) == size_x, "size_x mismatch"
+        assert len(splits["y"]) == size_y, "size_y mismatch"
+        assert len(splits["z"]) == size_z, "size_z mismatch"
+
+        return (
+            splits["test"],
+            splits["x"],
+            splits["y"],
+            splits["z"],
+        )
+
+    return stratified_split(
+        examples,
+        test_size=test_size,
+        size_x=size_x,
+        size_y=size_y,
+        size_z=size_z,
+        rng=rng,
+    )

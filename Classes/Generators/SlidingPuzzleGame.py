@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional
 from collections import deque
 import random
@@ -7,10 +7,24 @@ import random
 
 Move = str  # "UP", "DOWN", "LEFT", "RIGHT"
 
+# Reusable opposite-move mapping
+OPPOSITE_MOVE: Dict[Move, Move] = {
+    "UP": "DOWN",
+    "DOWN": "UP",
+    "LEFT": "RIGHT",
+    "RIGHT": "LEFT",
+}
+
 
 @dataclass
 class SlidingPuzzleGame:
     board_size: int = 3  # supports 3x3 by default
+
+    # cache for a single reverse BFS tree from the solved state
+    # maps: state -> (parent_state, move_from_parent_to_state)
+    _reverse_parents: Dict[Tuple[int, ...], Tuple[Tuple[int, ...], Move]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     @property
     def solved_state(self) -> Tuple[int, ...]:
@@ -18,7 +32,8 @@ class SlidingPuzzleGame:
         n = self.board_size * self.board_size
         return tuple(list(range(1, n)) + [0])  # 0 denotes the blank
 
-    # low-level helpers
+    # ---------- low-level helpers ----------
+
     def _to_grid(self, state: Tuple[int, ...]) -> List[List[int]]:
         n = self.board_size
         return [list(state[i * n : (i + 1) * n]) for i in range(n)]
@@ -60,7 +75,38 @@ class SlidingPuzzleGame:
             flat.extend(row)
         return tuple(flat)
 
-    # scramble / solve 
+    # ---------- precomputed reverse BFS ----------
+
+    def _ensure_reverse_bfs(self) -> None:
+        """
+        Build a BFS tree from the solved (goal) state to *all* reachable states
+        exactly once. After this, solve_puzzle can answer any query in O(path length).
+        """
+        if self._reverse_parents:
+            return  # already built
+
+        target = self.solved_state
+        q = deque([target])
+
+        # parent mapping: state -> (parent_state, move_from_parent_to_state)
+        parents: Dict[Tuple[int, ...], Tuple[Tuple[int, ...], Move]] = {
+            target: (target, "")
+        }
+
+        while q:
+            state = q.popleft()
+            for move in self.valid_moves(state):
+                nxt = self.apply_move(state, move)
+                if nxt in parents:
+                    continue
+                # move is the move that takes parent -> child
+                parents[nxt] = (state, move)
+                q.append(nxt)
+
+        self._reverse_parents = parents
+
+    # ---------- scramble / solve ----------
+
     def scramble_state(
         self,
         min_moves: int,
@@ -71,12 +117,11 @@ class SlidingPuzzleGame:
         state = self.solved_state
         steps = rng.randint(min_moves, max_moves)
         last_move: Optional[Move] = None
-        opposite = {"UP": "DOWN", "DOWN": "UP", "LEFT": "RIGHT", "RIGHT": "LEFT"}
 
         for _ in range(steps):
             moves = self.valid_moves(state)
             if last_move:
-                moves = [m for m in moves if m != opposite[last_move]]
+                moves = [m for m in moves if m != OPPOSITE_MOVE[last_move]]
             move = rng.choice(moves)
             state = self.apply_move(state, move)
             last_move = move
@@ -84,35 +129,36 @@ class SlidingPuzzleGame:
 
     def solve_puzzle(self, start: Tuple[int, ...]) -> Optional[List[Move]]:
         """
-        Solve via BFS to get the shortest sequence of moves back to the solved state.
-        Returns the move list or None if unsolvable (should not happen with scramble_state).
+        Return a shortest sequence of moves from `start` to the solved state.
+
+        Uses a single precomputed BFS tree from the goal to all states.
+        This is still optimal, but much faster than running BFS from `start` each time.
         """
         target = self.solved_state
         if start == target:
             return []
 
-        q = deque([start])
-        visited: Dict[Tuple[int, ...], Tuple[Tuple[int, ...], Move]] = {start: (start, "")}
+        # Build the reverse BFS tree if not already built
+        self._ensure_reverse_bfs()
 
-        while q:
-            state = q.popleft()
-            for move in self.valid_moves(state):
-                nxt = self.apply_move(state, move)
-                if nxt in visited:
-                    continue
-                visited[nxt] = (state, move)
-                if nxt == target:
-                    # reconstruct
-                    path: List[Move] = []
-                    cur = nxt
-                    while cur != start:
-                        prev, m = visited[cur]
-                        path.append(m)
-                        cur = prev
-                    path.reverse()
-                    return path
-                q.append(nxt)
-        return None
+        # If somehow an unsolvable state is given, it won't be in the map
+        if start not in self._reverse_parents:
+            return None
+
+        # Walk from `start` back to `target` using parent pointers,
+        # inverting moves so that the returned path goes start -> ... -> target.
+        path: List[Move] = []
+        cur = start
+        while cur != target:
+            parent, move_from_parent_to_cur = self._reverse_parents[cur]
+            # We want the move that takes us from cur to parent, i.e. the opposite.
+            inv_move = OPPOSITE_MOVE[move_from_parent_to_cur]
+            path.append(inv_move)
+            cur = parent
+
+        return path
+
+    # ---------- state sequences ----------
 
     def build_state_sequence(
         self, start: Tuple[int, ...], moves: List[Move]
@@ -125,7 +171,8 @@ class SlidingPuzzleGame:
             states.append(cur)
         return states
 
-    # formatting 
+    # ---------- formatting ----------
+
     def state_to_text(self, state: Tuple[int, ...]) -> str:
         """Readable grid with '_' for the blank."""
         grid = self._to_grid(state)
@@ -137,6 +184,8 @@ class SlidingPuzzleGame:
 
     def moves_to_text(self, moves: List[Move]) -> str:
         return "\n".join(moves)
+
+    # ---------- example construction ----------
 
     def make_example(
         self,
@@ -223,7 +272,6 @@ class SlidingPuzzleGame:
             "target": target,
         }
 
-
 def generate_sliding_puzzle_dataset(
     num_examples: int,
     board_size: int = 3,
@@ -233,13 +281,22 @@ def generate_sliding_puzzle_dataset(
     max_future_steps: int = 6,
     num_shots: int = 0,
     num_fewshot_examples: int = 3,
-    test_fraction: float = 0.1,
+    test_size: int = 300,
+    size_x: int = 500,
+    size_y: int = 1500,
+    size_z: int = 3000,
     seed: int = 0,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> Tuple[
+    List[Dict[str, Any]],  # test set
+    List[Dict[str, Any]],  # set x
+    List[Dict[str, Any]],  # set y
+    List[Dict[str, Any]],  # set z
+]:
     """
     Generate a dataset for sliding puzzles:
     - Each row: current board state, ask for next K optimal moves (UP/DOWN/LEFT/RIGHT).
     - Label: next K moves, one per line.
+    - Difficulty bucket: (scrambled_steps, future_steps)
     - Uniqueness keyed by (start_state, horizon_k).
     """
     rng = random.Random(seed)
@@ -252,7 +309,7 @@ def generate_sliding_puzzle_dataset(
     fewshot_examples: List[Dict[str, Any]] = []
     max_attempts = num_examples * 50
 
-    # few-shot pool
+    # -------- FEW-SHOT POOL --------
     if num_shots > 0:
         attempts = 0
         while len(fewshot_examples) < num_fewshot_examples and attempts < max_attempts:
@@ -294,7 +351,7 @@ def generate_sliding_puzzle_dataset(
             )
             demo_keys.add(key)
 
-    # main dataset
+    # -------- MAIN DATASET --------
     attempts = 0
     while len(examples) < num_examples and attempts < max_attempts:
         attempts += 1
@@ -337,18 +394,79 @@ def generate_sliding_puzzle_dataset(
             f"out of requested {num_examples}."
         )
 
-    n_total = len(examples)
-    n_test = max(1, int(round(n_total * test_fraction)))
-    n_train = n_total - n_test
+    # -------- STRATIFIED SPLIT BY DIFFICULTY (scrambled_steps, future_steps) --------
+    def stratified_split(
+        examples: List[Dict[str, Any]],
+        test_size: int,
+        size_x: int,
+        size_y: int,
+        size_z: int,
+        rng: random.Random,
+    ):
+        total_needed = test_size + size_x + size_y + size_z
+        assert total_needed <= len(examples), (
+            "Requested split sizes exceed dataset size: "
+            f"needed={total_needed}, available={len(examples)}"
+        )
 
-    indices = list(range(n_total))
-    rng.shuffle(indices)
+        # bucket by (scrambled_steps, future_steps) as a difficulty proxy
+        buckets: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+        for ex in examples:
+            key = (ex["scrambled_steps"], ex["future_steps"])
+            buckets.setdefault(key, []).append(ex)
 
-    test_idx = set(indices[:n_test])
-    train_examples = [examples[i] for i in range(n_total) if i not in test_idx]
-    test_examples = [examples[i] for i in range(n_total) if i in test_idx]
+        for key in buckets:
+            rng.shuffle(buckets[key])
 
-    assert len(train_examples) == n_train
-    assert len(test_examples) == n_test
+        splits = {
+            "test": [],
+            "x": [],
+            "y": [],
+            "z": [],
+        }
+        remaining = {
+            "test": test_size,
+            "x": size_x,
+            "y": size_y,
+            "z": size_z,
+        }
 
-    return train_examples, test_examples
+        def total_remaining():
+            return sum(remaining.values())
+
+        # spread each bucket across splits
+        for key, ex_list in buckets.items():
+            if total_remaining() == 0:
+                break
+            for ex in ex_list:
+                if total_remaining() == 0:
+                    break
+                candidates = [s for s, r in remaining.items() if r > 0]
+                if not candidates:
+                    break
+                # greedy largest-remaining allocation (consistent with Hanoi/Fibonacci)
+                best_split = max(candidates, key=lambda s: remaining[s])
+                splits[best_split].append(ex)
+                remaining[best_split] -= 1
+
+        # sanity checks
+        assert len(splits["test"]) == test_size, "test_size mismatch"
+        assert len(splits["x"]) == size_x, "size_x mismatch"
+        assert len(splits["y"]) == size_y, "size_y mismatch"
+        assert len(splits["z"]) == size_z, "size_z mismatch"
+
+        return (
+            splits["test"],
+            splits["x"],
+            splits["y"],
+            splits["z"],
+        )
+
+    return stratified_split(
+        examples,
+        test_size=test_size,
+        size_x=size_x,
+        size_y=size_y,
+        size_z=size_z,
+        rng=rng,
+    )

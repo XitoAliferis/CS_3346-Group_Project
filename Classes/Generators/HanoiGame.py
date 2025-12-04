@@ -5,17 +5,12 @@ import random
 from copy import deepcopy
 
 
-# general hanoi game class
 @dataclass
 class HanoiGame:
     min_disks: int = 2
     max_disks: int = 8
     peg_labels: Tuple[str, str, str] = ("A", "B", "C")
 
-    # generating the optimal moves to move the tower of n_disks from the src
-    # position to the dst position using the aux peg
-    # returns: a list of (from peg, to peg)
-    # based off this: https://www.geeksforgeeks.org/dsa/c-program-for-tower-of-hanoi/
     def generate_optimal_moves(
         self,
         n_disks: int,
@@ -35,19 +30,14 @@ class HanoiGame:
         solve(n_disks, src, dst, aux)
         return moves
 
-    # builds a state sequence, which simulates the pegs over time given the move list
-    # inputs number of disks, moves, and the source peg
-    # returns the states at index i, the states after applying i moves
-    # and the state[0] which is the intial config
     def build_state_sequence(
         self,
         n_disks: int,
         moves: List[Tuple[int, int]],
         src: int,
     ) -> List[List[List[int]]]:
-        # pegs as lists of disks, bottom -> top.
         pegs: List[List[int]] = [[], [], []]
-        pegs[src] = list(range(n_disks, 0, -1))  # all disks on source peg
+        pegs[src] = list(range(n_disks, 0, -1))
 
         states: List[List[List[int]]] = [deepcopy(pegs)]
         for (m_src, m_dst) in moves:
@@ -56,19 +46,16 @@ class HanoiGame:
             states.append(deepcopy(pegs))
         return states
 
-    # formatting the text so it's readable to LLMs
     def state_to_text(self, state: List[List[int]]) -> str:
         lines = []
         for label, peg in zip(self.peg_labels, state):
             if peg:
-                # show from bottom to top
                 disks_str = " ".join(str(d) for d in peg)
                 lines.append(f"Peg {label}: {disks_str}")
             else:
                 lines.append(f"Peg {label}: empty")
         return "\n".join(lines)
 
-    # represents moves as "X->Y"
     def moves_to_text(
         self,
         moves: List[Tuple[int, int]],
@@ -78,13 +65,6 @@ class HanoiGame:
             lines.append(f"{self.peg_labels[src]}->{self.peg_labels[dst]}")
         return "\n".join(lines)
 
-    # makes a single example based on the params defined
-    # makes the prompt which is a text description of the current state + an instruction
-    # allows for oneshot or fewshot examples too
-    # zero-shot -> num_shots = 0
-    # one-shot -> num_shots = 1
-    # few-shot -> num_shots > 1
-    # target is the next K moves (optimal) and it is printed once per line as "X->Y"
     def make_example(
         self,
         n_disks: int,
@@ -98,7 +78,6 @@ class HanoiGame:
         num_shots: int = 0,
         fewshot_examples: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        # get current state & upcoming moves
         current_state = states[start_idx]
         future_moves = moves[start_idx : start_idx + horizon_k]
 
@@ -148,7 +127,6 @@ class HanoiGame:
 
         fewshot_section = "".join(fewshot_blocks)
 
-        # ---- MAIN USER PROMPT (chat formatted) ----
         user_prompt = (
             "Now solve this new instance.\n"
             f"You are solving the Towers of Hanoi puzzle with {n_disks} disks.\n"
@@ -172,7 +150,6 @@ class HanoiGame:
             f"Any deviation from the required {horizon_k} lines is INVALID.\n"
         )
 
-        # FULL CHAT-FORMAT PROMPT
         prompt = (
             f"{fewshot_section}"
             "<|im_start|>user\n"
@@ -181,7 +158,6 @@ class HanoiGame:
             "<|im_start|>assistant\n"
         )
 
-        # Target: model should generate ONLY these lines + end marker
         target = f"{query_moves_text}\n<|im_end|>"
 
         return {
@@ -197,15 +173,6 @@ class HanoiGame:
         }
 
 
-# generate the entire dataset
-# input params include the total examples produced, the min and max disks, min and max steps,
-# number of shots (examples in the prompt), and the seed
-# returns the full dataset
-# notes
-# - each row shows a current state, asks for K next moves and the label is the next K moves as "X->Y" lines
-# - no two rows share the same config (defined as the combination of:
-#   n_disks, src, dst, aux, start_step, future_steps)
-# - if there are shots (examples), we create them first and ensure they never appear in the dataset (avoiding leakage)
 def generate_hanoi_dataset(
     num_examples: int,
     min_disks: int = 2,
@@ -214,23 +181,30 @@ def generate_hanoi_dataset(
     max_future_steps: int = 8,
     num_shots: int = 0,
     num_fewshot_examples: int = 3,
-    test_fraction: float = 0.1,
+    test_size: int = 300,
+    size_x: int = 500,
+    size_y: int = 1500,
+    size_z: int = 3000,
     seed: int = 0,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    rng = random.Random(seed)  # seed for reproducibility
+) -> Tuple[
+    List[Dict[str, Any]],  # test set
+    List[Dict[str, Any]],  # set x
+    List[Dict[str, Any]],  # set y
+    List[Dict[str, Any]],  # set z
+]:
+    rng = random.Random(seed)
     game = HanoiGame(min_disks=min_disks, max_disks=max_disks)
 
-    examples: List[Dict[str, Any]] = []  # all rows
-    seen_keys = set()  # keys for dataset rows (n_disks, src, dst, aux, start_idx, horizon_k)
-    demo_keys = set()  # keys reserved for few-shot demos
+    examples: List[Dict[str, Any]] = []
+    seen_keys = set()
+    demo_keys = set()
 
-    # cache: (n_disks, src, dst, aux) -> (moves, states)
     cache: Dict[
         Tuple[int, int, int, int],
         Tuple[List[Tuple[int, int]], List[List[List[int]]]],
     ] = {}
 
-    # ---------- build few-shot pool (if needed) ----------
+    # ---------- few-shot pool ----------
     fewshot_examples: List[Dict[str, Any]] = []
     if num_shots > 0:
         attempts = 0
@@ -238,10 +212,7 @@ def generate_hanoi_dataset(
         while len(fewshot_examples) < num_fewshot_examples and attempts < max_attempts:
             attempts += 1
 
-            # pick random number of disks
             n_disks = rng.randint(min_disks, max_disks)
-
-            # randomize source, destination, auxiliary pegs
             peg_idxs = [0, 1, 2]
             src, dst = rng.sample(peg_idxs, 2)
             aux = next(i for i in peg_idxs if i not in (src, dst))
@@ -293,16 +264,13 @@ def generate_hanoi_dataset(
                 f"out of requested {num_fewshot_examples}."
             )
 
-    # ---------- generate main dataset ----------
+    # ---------- main dataset ----------
     attempts = 0
     max_attempts = num_examples * 50
     while len(examples) < num_examples and attempts < max_attempts:
         attempts += 1
 
-        # number of disks
         n_disks = rng.randint(min_disks, max_disks)
-
-        # randomize source, destination, auxiliary for this example
         peg_idxs = [0, 1, 2]
         src, dst = rng.sample(peg_idxs, 2)
         aux = next(i for i in peg_idxs if i not in (src, dst))
@@ -352,20 +320,79 @@ def generate_hanoi_dataset(
             f"out of requested {num_examples}."
         )
 
-    # ---------- split into 90% train / 10% test ----------
-    n_total = len(examples)
-    n_test = max(1, int(round(n_total * test_fraction)))  # ensure at least 1
-    n_train = n_total - n_test
+    # ---------- stratified split by difficulty (n_disks, future_steps) ----------
+    def stratified_split(
+        examples: List[Dict[str, Any]],
+        test_size: int,
+        size_x: int,
+        size_y: int,
+        size_z: int,
+        rng: random.Random,
+    ):
+        total_needed = test_size + size_x + size_y + size_z
+        assert total_needed <= len(examples), (
+            "Requested split sizes exceed dataset size: "
+            f"needed={total_needed}, available={len(examples)}"
+        )
 
-    indices = list(range(n_total))
-    rng.shuffle(indices)
-    test_idx = set(indices[:n_test])
+        # bucket examples by (n_disks, future_steps) as a difficulty proxy
+        buckets: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
+        for ex in examples:
+            key = (ex["n_disks"], ex["future_steps"])
+            buckets.setdefault(key, []).append(ex)
 
-    train_examples = [examples[i] for i in range(n_total) if i not in test_idx]
-    test_examples = [examples[i] for i in range(n_total) if i in test_idx]
+        for key in buckets:
+            rng.shuffle(buckets[key])
 
-    # sanity
-    assert len(train_examples) == n_train
-    assert len(test_examples) == n_test
+        splits = {
+            "test": [],
+            "x": [],
+            "y": [],
+            "z": [],
+        }
+        remaining = {
+            "test": test_size,
+            "x": size_x,
+            "y": size_y,
+            "z": size_z,
+        }
 
-    return train_examples, test_examples
+        def total_remaining():
+            return sum(remaining.values())
+
+        # iterate over buckets; within each bucket spread examples across splits
+        for key, ex_list in buckets.items():
+            if total_remaining() == 0:
+                break
+            for ex in ex_list:
+                if total_remaining() == 0:
+                    break
+                # choose split with largest remaining capacity
+                candidates = [s for s, r in remaining.items() if r > 0]
+                if not candidates:
+                    break
+                best_split = max(candidates, key=lambda s: remaining[s])
+                splits[best_split].append(ex)
+                remaining[best_split] -= 1
+
+        # final sanity checks
+        assert len(splits["test"]) == test_size, "test_size mismatch"
+        assert len(splits["x"]) == size_x, "size_x mismatch"
+        assert len(splits["y"]) == size_y, "size_y mismatch"
+        assert len(splits["z"]) == size_z, "size_z mismatch"
+
+        return (
+            splits["test"],
+            splits["x"],
+            splits["y"],
+            splits["z"],
+        )
+
+    return stratified_split(
+        examples,
+        test_size=test_size,
+        size_x=size_x,
+        size_y=size_y,
+        size_z=size_z,
+        rng=rng,
+    )
