@@ -3,40 +3,59 @@ from Classes.Generators.FibonacciGame import generate_fibonacci_dataset
 from Classes.Generators.SlidingPuzzleGame import generate_sliding_puzzle_dataset
 from Classes.Utils.data_utils import save_jsonl
 
-train_data, test_data = generate_hanoi_dataset(
-    num_examples=50,
+
+num_examples = 6000
+test_size = 300
+size_x = 500
+size_y = 1500
+size_z = 3000
+seed = 42
+
+test_data, train_x, train_y, train_z = generate_hanoi_dataset(
+    num_examples=num_examples,
     min_disks=3,
     max_disks=8,
     min_future_steps=1,
     max_future_steps=8,
-    num_shots=0,             
+    num_shots=0,
     num_fewshot_examples=3,
-    test_fraction=0.1,
-    seed=42,
+    seed=seed,
+    test_size=test_size,
+    size_x=size_x,
+    size_y=size_y,
+    size_z=size_z,
 )
 
-save_jsonl(train_data, "../Data/Train/towers_hanoi_train")
-save_jsonl(test_data, "../Data/Test/towers_hanoi_test")
 
-'''
-fib_train, fib_test = generate_fibonacci_dataset(
-    num_examples=50,
+save_jsonl(train_x, f"../Data/Train/towers_hanoi_train_{size_x}")
+save_jsonl(train_y, f"../Data/Train/towers_hanoi_train_{size_y}")
+save_jsonl(train_z, f"../Data/Train/towers_hanoi_train_{size_z}")
+save_jsonl(test_data, f"../Data/Test/towers_hanoi_test")
+
+
+fib_test, fib_train_x, fib_train_y, fib_train_z = generate_fibonacci_dataset(
+    num_examples=num_examples,
     min_terms=10,
-    max_terms=40,
+    max_terms=50,
     min_future_steps=1,
     max_future_steps=8,
-    num_shots=0,            
+    num_shots=0,
     num_fewshot_examples=3,
-    test_fraction=0.1,
-    seed=123,
+    test_size=test_size,
+    size_x=size_x,
+    size_y=size_y,
+    size_z=size_z,
+    seed=seed,
 )
 
-save_jsonl(fib_train, "../Data/Train/fibonacci_train")
+save_jsonl(fib_train_x, f"../Data/Train/fibonacci_train_{size_x}")
+save_jsonl(fib_train_y, f"../Data/Train/fibonacci_train_{size_y}")
+save_jsonl(fib_train_z, f"../Data/Train/fibonacci_train_{size_z}")
 save_jsonl(fib_test, "../Data/Test/fibonacci_test")
 
 
-sliding_train, sliding_test = generate_sliding_puzzle_dataset(
-    num_examples=50,
+sp_test, sp_train_x, sp_train_y, sp_train_z = generate_sliding_puzzle_dataset(
+    num_examples=num_examples,
     board_size=3,
     min_scramble_moves=10,
     max_scramble_moves=30,
@@ -44,10 +63,15 @@ sliding_train, sliding_test = generate_sliding_puzzle_dataset(
     max_future_steps=6,
     num_shots=0,
     num_fewshot_examples=3,
-    test_fraction=0.1,
-    seed=7,
+    test_size=test_size,
+    size_x=size_x,
+    size_y=size_y,
+    size_z=size_z,
+    seed=seed,
 )
 
-save_jsonl(sliding_train, "../Data/Train/sliding_puzzle_train")
-save_jsonl(sliding_test, "../Data/Test/sliding_puzzle_test")
-'''
+
+save_jsonl(sp_train_x, f"../Data/Train/sliding_puzzle_train_{size_x}")
+save_jsonl(sp_train_y, f"../Data/Train/sliding_puzzle_train_{size_y}")
+save_jsonl(sp_train_z, f"../Data/Train/sliding_puzzle_train_{size_z}")
+save_jsonl(sp_test, "../Data/Test/sliding_puzzle_test")

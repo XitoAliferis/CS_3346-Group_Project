@@ -7,10 +7,11 @@ class Qwen5BConfig(BaseModelConfig):
     model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"
     lr: float = 2e-5
     batch_size: int = 4
-    num_epochs: int = 2
+    num_epochs: int = 10
     warmup_ratio: float = 0.1
     weight_decay: float = 0.01
     lora_rank: int = 16
+    grad_acc_steps: int = 4
     use_lora: bool = True
 
 class Qwen5B(BaseModel):

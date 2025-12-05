@@ -1,0 +1,13 @@
+{
+    "exact_match": 0.03333333333333333,
+    "relative_accuracy": 0.11594444444444443,
+    "syntax_accuracy": 1.0,
+    "invalid_move_rate": 0.4577777777777776,
+    "edit_similarity": 0.48775234025234016,
+    "first_error_position": 1.2966666666666666,
+    "local_optimality_deviation": 0.884055555555556,
+    "stability_error": 0.0,
+    "peg_load_divergence": 0.4298015873015872,
+    "future_legal_prefix_rate": 0.387222222222222,
+    "first_critical_divergence": 1.2966666666666666
+}

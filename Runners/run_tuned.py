@@ -8,18 +8,42 @@ test_dir  = './Data/Test/'
 
 # game list
 TASKS = {
-    "hanoi": {
-        "train": "towers_hanoi_train",
-        "test":  "towers_hanoi_test",
+    #"hanoi_500": {
+    #    "train": "towers_hanoi_train_500",
+    #    "test":  "towers_hanoi_test",
+    #},
+    #"hanoi_1500": {
+    #    "train": "towers_hanoi_train_1500",
+    #    "test":  "towers_hanoi_test",
+    #},
+    #"hanoi_3000": {
+    #    "train": "towers_hanoi_train_3000",
+    #    "test":  "towers_hanoi_test",
+    #},
+    "fibonacci_500": {
+        "train": "fibonacci_train_500",
+        "test":  "fibonacci_test",
     },
-    #"fibonacci": {
-    #    "train": "fibonacci_train",
+    "fibonacci_1500": {
+        "train": "fibonacci_train_1500",
+        "test":  "fibonacci_test",
+    },
+    #"fibonacci_3000": {
+    #    "train": "fibonacci_train_3000",
     #    "test":  "fibonacci_test",
     #},
-    #"sliding": {
-    #    "train": "sliding_puzzle_train",
+    "sliding_puzzle_500": {
+        "train": "sliding_puzzle_train_500",
+        "test":  "sliding_puzzle_test",
+    },
+    "sliding_puzzle_1500": {
+        "train": "sliding_puzzle_train_1500",
+        "test":  "sliding_puzzle_test",
+    },
+    #"sliding_puzzle_3000": {
+    #    "train": "sliding_puzzle_train_3000",
     #    "test":  "sliding_puzzle_test",
-    #}
+    #},
 }
 
 
@@ -54,14 +78,15 @@ def process_task(task_name, train_ds, test_ds):
         train_ds, n_folds=1, seed=42  
     )
 
+    count = len(train_ds)
     print('training / loading tuned model')
     tuned_model, tuned_tokenizer = model.load_or_train_tuned_model(
-        train_folds, val_folds, n_trials=2, use_optuna=False
+        train_folds, val_folds, n_trials=2, use_optuna=False, save_name=f"{task_name}_test_{count}_examples"
     )
 
     print('evaluating tuned Qwen5B')
     metrics_tuned = model.evaluate_tuned_model(
-        tuned_model, tuned_tokenizer, test_ds, f"{task_name}_test_base"
+        tuned_model, tuned_tokenizer, test_ds, f"{task_name}_test_{count}_examples"
     )
 
     print("Tuned model metrics:", metrics_tuned)

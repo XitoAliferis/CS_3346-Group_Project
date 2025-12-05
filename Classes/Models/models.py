@@ -113,11 +113,11 @@ class BaseModelConfig:
     # train settings
     lr: float = 2e-5
     batch_size: int = 4
-    num_epochs: int = 2
-    warmup_ratio: float = 0.1
+    num_epochs: int = 10
+    warmup_ratio: float = 0.05
     weight_decay: float = 0.01
     lora_rank: int = 16
-
+    grad_acc_steps: int = 4
     use_lora: bool = True
 
 
@@ -129,9 +129,11 @@ class BaseModel:
     # file path for best params
     @property
     def best_param_path(self) -> str:
-        safe_name = self.cfg.model_name.replace("/", "_")
-        return f"./Results/{safe_name}_best_params.json"
+        return f"{self.task_dir(self.cfg.model_name.replace('/', '_'))}/best_params.json"
 
+
+    def task_dir(self, task_name: str) -> str:
+        return f"./Results/{task_name}"
     # ---------------------------------------------------------
     # 0) 5-fold cross-validation splitter
     # ---------------------------------------------------------
@@ -294,21 +296,28 @@ class BaseModel:
     # ---------------------------------------------------------
     # 4) build train args
     # ---------------------------------------------------------
-    def build_training_args(self, save_name: str):
+    def build_training_args(self, save_name: str, train_size=None):
         return TrainingArguments(
-            output_dir=f"./Results/{save_name}",
+            output_dir=f"{self.task_dir(save_name)}/training",
             per_device_train_batch_size=self.cfg.batch_size,
+            gradient_accumulation_steps=self.cfg.grad_acc_steps,
             learning_rate=self.cfg.lr,
             num_train_epochs=self.cfg.num_epochs,
             weight_decay=self.cfg.weight_decay,
             warmup_ratio=self.cfg.warmup_ratio,
             bf16=True,
-            logging_steps=20,
-            save_steps=500,
-            save_total_limit=2,
+
+            max_steps=-1,
+            logging_strategy="epoch",
+            eval_strategy="epoch",
+
+            prediction_loss_only=True,
+            save_steps=999999,
             report_to="none",
-            remove_unused_columns=False,  # <-- important
+            remove_unused_columns=False,
         )
+
+
 
     # ---------------------------------------------------------
     # 5) run one train
@@ -329,7 +338,8 @@ class BaseModel:
         print(f"[TRAIN] tokenized train columns: {train_tok.column_names}")
 
         collator = DataCollatorForSeq2Seq(tokenizer, model=model)
-        args = self.build_training_args(save_name)
+        args = self.build_training_args(save_name, train_size=len(train_tok))
+
 
         trainer = Trainer(
             model=model,
@@ -337,11 +347,11 @@ class BaseModel:
             train_dataset=train_tok,
             eval_dataset=val_tok,
             data_collator=collator,
-            compute_metrics=self.compute_metrics,
+            compute_metrics=None
         )
 
         trainer.train()
-        trainer.save_model(f"./Results/{save_name}/final_model")
+        trainer.save_model(f"{self.task_dir(save_name)}/final_tuned_model")
 
         # show trainable params AFTER training (they should be same modules as before,
         # but altered weights)
@@ -357,17 +367,19 @@ class BaseModel:
     def evaluate_model(self, model, tokenizer, test_ds, save_name: str = "test_eval"):
         """
         Evaluates a given model+tokenizer on a test dataset.
-        Returns HF metrics dict (e.g. eval_loss, etc.).
+        Returns HF metrics dict (e.g. eval_loss).
         """
         test_tok = self.tokenize_dataset(test_ds, tokenizer)
 
         collator = DataCollatorForSeq2Seq(tokenizer, model=model)
+
         args = TrainingArguments(
-            output_dir=f"./Results/{save_name}",
+            output_dir=f"{self.task_dir(save_name)}/eval",
             per_device_eval_batch_size=self.cfg.batch_size,
-            do_train=False,
             do_eval=True,
             report_to="none",
+            prediction_loss_only=True,
+            eval_strategy="no",     # do not evaluate repeatedly
         )
 
         trainer = Trainer(
@@ -375,7 +387,9 @@ class BaseModel:
             args=args,
             eval_dataset=test_tok,
             data_collator=collator,
-            compute_metrics=self.compute_metrics,
+
+            # compute_metrics MUST be removed or it will force logits too
+            compute_metrics=None,
         )
 
         metrics = trainer.evaluate()
@@ -502,18 +516,20 @@ class BaseModel:
 
         model = trainer.model
         return model, tokenizer
-
+    
     def compute_metrics(self, eval_pred):
-        logits, labels = eval_pred
-
-        # logits: [batch, seq_len, vocab]
-        # we take the highest-probability token at each step
-        preds = np.argmax(logits, axis=-1)
-
-        # shift to ignore padded tokens (-100)
+        # Should NEVER be called during training/eval now
+        # but keep it safe for manual eval
+        preds, labels = eval_pred
         mask = labels != -100
         preds = preds[mask]
         labels = labels[mask]
+
+        return {
+            "accuracy": accuracy_metric.compute(
+                predictions=preds, references=labels
+            )["accuracy"]
+        }
 
         return {
             "accuracy": accuracy_metric.compute(
@@ -532,7 +548,7 @@ class BaseModel:
         - Extracts the first horizon_k clean lines from the model output
         - Compares exact string match of normalized prediction vs normalized target
         """
-        out_dir = f"./Results/metrics/{save_name}"
+        out_dir = f"{self.task_dir(save_name)}/metrics"
         os.makedirs(out_dir, exist_ok=True)
 
         pred_path = f"{out_dir}/predictions.jsonl"
@@ -557,6 +573,8 @@ class BaseModel:
             input_ids = enc.input_ids.to(model.device)
             attention_mask = enc.attention_mask.to(model.device)
 
+            gold_norm = normalize_target_text(target)
+            horizon_k = get_horizon_k(target)
             # ==========
             # 2) Generate continuation (greedy, deterministic)
             # ==========
@@ -564,7 +582,7 @@ class BaseModel:
                 output_ids = model.generate(
                     input_ids,
                     attention_mask=attention_mask,
-                    max_new_tokens=64,  # tweakable
+                    max_new_tokens=horizon_k+5,
                     do_sample=False,  # greedy
                     temperature=0.0,
                     eos_token_id=tokenizer.eos_token_id,
@@ -580,8 +598,7 @@ class BaseModel:
             # ==========
             # 3) Generic evaluation: compare normalized K lines
             # ==========
-            gold_norm = normalize_target_text(target)
-            horizon_k = get_horizon_k(target)
+            
 
             pred_lines = extract_answer_lines(pred_only, horizon_k)
             if pred_lines is None:
