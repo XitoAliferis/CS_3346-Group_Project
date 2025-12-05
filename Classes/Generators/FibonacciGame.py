@@ -8,6 +8,8 @@ import random
 class FibonacciGame:
     min_terms: int = 10
     max_terms: int = 40
+    # NEW: only show this many most-recent prefix terms in the prompt
+    max_visible_prefix_terms: int = 12
 
     def fib_sequence(self, n_terms: int) -> List[int]:
         """Generate the first n_terms of the Fibonacci sequence."""
@@ -41,10 +43,13 @@ class FibonacciGame:
         fewshot_examples: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
 
+        # Logical prefix / target
         prefix = full_seq[: start_idx + 1]
         future = full_seq[start_idx + 1 : start_idx + 1 + horizon_k]
 
-        prefix_text = self.seq_to_text(prefix)
+        # Only *show* the last max_visible_prefix_terms in the prompt
+        visible_prefix = prefix[-self.max_visible_prefix_terms :]
+        visible_prefix_text = self.seq_to_text(visible_prefix)
         target_text = self.target_to_text(future)
 
         # ---- FEWSHOT (inside chat format) ----
@@ -57,7 +62,9 @@ class FibonacciGame:
                 demo_block = (
                     "<|im_start|>user\n"
                     "Fibonacci sequence prediction.\n"
-                    f"Sequence so far:\n{demo['prefix_text']}\n"
+                    "You are given a contiguous slice of a Fibonacci-like sequence.\n"
+                    "Sequence so far (from left to right):\n"
+                    f"{demo['visible_prefix_text']}\n"
                     f"Provide the next {demo['future_steps']} numbers.\n"
                     "STRICT OUTPUT FORMAT (MANDATORY):\n"
                     "---------------------------------\n"
@@ -83,9 +90,9 @@ class FibonacciGame:
         # ---- MAIN PROMPT (user turn) ----
         user_prompt = (
             "Now solve this new instance.\n"
-            "You are given the beginning of a Fibonacci-like sequence.\n"
+            "You are given a contiguous slice of a Fibonacci-like sequence.\n"
             "Sequence so far (from left to right):\n"
-            f"{prefix_text}\n\n"
+            f"{visible_prefix_text}\n\n"
             f"Provide the next {horizon_k} numbers in the sequence.\n\n"
             "STRICT OUTPUT FORMAT (MANDATORY):\n"
             "---------------------------------\n"
@@ -104,7 +111,7 @@ class FibonacciGame:
         prompt = (
             f"{fewshot_section}"
             "<|im_start|>user\n"
-            f"{user_prompt}"
+            f"{user_prompt}\n"
             "<|im_end|>\n"
             "<|im_start|>assistant\n"
         )
@@ -186,9 +193,11 @@ def generate_fibonacci_dataset(
                 continue
 
             prefix = full_seq[: start_idx + 1]
+            visible_prefix = prefix[-game.max_visible_prefix_terms :]
             future = full_seq[start_idx + 1 : start_idx + 1 + horizon_k]
 
             prefix_text = game.seq_to_text(prefix)
+            visible_prefix_text = game.seq_to_text(visible_prefix)
             target_text = game.target_to_text(future)
 
             fewshot_examples.append(
@@ -196,7 +205,8 @@ def generate_fibonacci_dataset(
                     "total_terms": total_terms,
                     "start_idx": start_idx,
                     "future_steps": horizon_k,
-                    "prefix_text": prefix_text,
+                    "prefix_text": prefix_text,                # full (metadata)
+                    "visible_prefix_text": visible_prefix_text,  # truncated (used in prompt)
                     "target_text": target_text,
                 }
             )
