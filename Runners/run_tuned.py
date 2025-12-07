@@ -20,26 +20,26 @@ TASKS = {
     #    "train": "towers_hanoi_train_3000",
     #    "test":  "towers_hanoi_test",
     #},
-    "fibonacci_500": {
-        "train": "fibonacci_train_500",
-        "test":  "fibonacci_test",
-    },
-    "fibonacci_1500": {
-        "train": "fibonacci_train_1500",
-        "test":  "fibonacci_test",
-    },
-    #"fibonacci_3000": {
-    #    "train": "fibonacci_train_3000",
+    #"fibonacci_500": {
+    #    "train": "fibonacci_train_500",
     #    "test":  "fibonacci_test",
     #},
-    "sliding_puzzle_500": {
-        "train": "sliding_puzzle_train_500",
-        "test":  "sliding_puzzle_test",
+    #"fibonacci_1500": {
+    #    "train": "fibonacci_train_1500",
+    #    "test":  "fibonacci_test",
+    #},
+    "fibonacci_3000": {
+        "train": "fibonacci_train_3000",
+        "test":  "fibonacci_test",
     },
-    "sliding_puzzle_1500": {
-        "train": "sliding_puzzle_train_1500",
-        "test":  "sliding_puzzle_test",
-    },
+    #"sliding_puzzle_500": {
+    #    "train": "sliding_puzzle_train_500",
+    #    "test":  "sliding_puzzle_test",
+    #},
+    #"sliding_puzzle_1500": {
+    #    "train": "sliding_puzzle_train_1500",
+    #    "test":  "sliding_puzzle_test",
+    #},
     #"sliding_puzzle_3000": {
     #    "train": "sliding_puzzle_train_3000",
     #    "test":  "sliding_puzzle_test",
