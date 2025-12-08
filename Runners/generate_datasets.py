@@ -92,3 +92,6 @@ nq_train_x, nq_test_x, nq_train_y, nq_test_y, nq_train_z, nq_test_z = generate_n
 )
 
 save_jsonl(nq_train_x, f"../Data/Train/nqueens_train_{size_x}")
+save_jsonl(nq_train_y, f"../Data/Train/nqueens_train_{size_y}")
+save_jsonl(nq_train_z, f"../Data/Train/nqueens_train_{size_z}")
+# save_jsonl(nq_test_x, "../Data/Test/nqueens_test_x")

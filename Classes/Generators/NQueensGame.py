@@ -123,6 +123,21 @@ def splitBucketedSolutionsByPercentage(percent: float, buckets: Dict[int, List[N
 		rest.extend(shuffled[int(len(shuffled) * percent):])
 	return percentSelected, rest
 
+def debucket(buckets: Dict[int, List[NQueensLayout]]) -> List[NQueensLayout]:
+	all = []
+	for n, solutions in buckets.items():
+		all.extend(solutions)
+	return all
+
+def splitSolutionsByArbitraryRemoval(amount: int, solutions: List[NQueensLayout], randomSeed: int = 0) -> Tuple[List[NQueensLayout], List[NQueensLayout]]:
+	all = solutions.copy()
+	rng = random.Random(randomSeed)
+	rng.shuffle(all)
+	selected = all[:amount]
+	rest = all[amount:]
+	return selected, rest
+	
+
 def generate_nqueens_dataset(
 		amountForTesting: int, 
 		firstSplit: int, 
@@ -140,13 +155,13 @@ def generate_nqueens_dataset(
 		List[Dict[str, Any]]  # thirdSplitTest
 	]:
 	# (we assume the 3rd split is the biggest)
-	thirdSplitBuckets = calculateBucketedCumulativeNQueensSolutions(thirdSplit, minimumN=minimumN, logProgress=logProgress)
-	firstSplitBuckets = getFirstAmountOfBuckets(firstSplit, thirdSplitBuckets)
-	secondSplitBuckets = getFirstAmountOfBuckets(secondSplit, thirdSplitBuckets)
+	thirdSplitSolutions = calculateCumulativeNQueensSolutions(thirdSplit + amountForTesting, minimumN=minimumN, logProgress=logProgress)
+	firstSplitSolutions = thirdSplitSolutions[:firstSplit+amountForTesting]
+	secondSplitSolutions = thirdSplitSolutions[:secondSplit+amountForTesting]
 
-	firstSplitTest, firstSplitTrain = splitBucketedSolutionsByPercentage(amountForTesting/firstSplit, firstSplitBuckets, randomSeed=randomSeed)
-	secondSplitTest, secondSplitTrain = splitBucketedSolutionsByPercentage(amountForTesting/secondSplit, secondSplitBuckets, randomSeed=randomSeed)
-	thirdSplitTest, thirdSplitTrain = splitBucketedSolutionsByPercentage(amountForTesting/thirdSplit, thirdSplitBuckets, randomSeed=randomSeed)
+	firstSplitTest, firstSplitTrain = splitSolutionsByArbitraryRemoval(amountForTesting, firstSplitSolutions, randomSeed=randomSeed)
+	secondSplitTest, secondSplitTrain = splitSolutionsByArbitraryRemoval(amountForTesting, secondSplitSolutions, randomSeed=randomSeed)
+	thirdSplitTest, thirdSplitTrain = splitSolutionsByArbitraryRemoval(amountForTesting, thirdSplitSolutions, randomSeed=randomSeed)
 
 	return (
 		[solution.asDict() for solution in firstSplitTrain],
