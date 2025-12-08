@@ -1,6 +1,7 @@
 from Classes.Generators.HanoiGame import generate_hanoi_dataset
 from Classes.Generators.FibonacciGame import generate_fibonacci_dataset
 from Classes.Generators.SlidingPuzzleGame import generate_sliding_puzzle_dataset
+from Classes.Generators.NQueensGame import generate_nqueens_dataset
 from Classes.Utils.data_utils import save_jsonl
 
 
@@ -75,3 +76,19 @@ save_jsonl(sp_train_x, f"../Data/Train/sliding_puzzle_train_{size_x}")
 save_jsonl(sp_train_y, f"../Data/Train/sliding_puzzle_train_{size_y}")
 save_jsonl(sp_train_z, f"../Data/Train/sliding_puzzle_train_{size_z}")
 save_jsonl(sp_test, "../Data/Test/sliding_puzzle_test")
+
+
+
+nq_train_x, nq_test_x, nq_train_y, nq_test_y, nq_train_z, nq_test_z = generate_nqueens_dataset(
+    firstSplit=size_x, 
+    secondSplit=size_y, 
+    thirdSplit=size_z, 
+    amountForTesting=test_size,
+
+    randomSeed=seed,
+
+    minimumN=4, 
+    logProgress=True,
+)
+
+save_jsonl(nq_train_x, f"../Data/Train/nqueens_train_{size_x}")
