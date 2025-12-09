@@ -28,10 +28,10 @@ TASKS = {
     #    "train": "fibonacci_train_1500",
     #    "test":  "fibonacci_test",
     #},
-    "fibonacci_3000": {
-        "train": "fibonacci_train_3000",
-        "test":  "fibonacci_test",
-    },
+    #"fibonacci_3000": {
+    #    "train": "fibonacci_train_3000",
+    #    "test":  "fibonacci_test",
+    #},
     #"sliding_puzzle_500": {
     #    "train": "sliding_puzzle_train_500",
     #    "test":  "sliding_puzzle_test",
@@ -44,6 +44,18 @@ TASKS = {
     #    "train": "sliding_puzzle_train_3000",
     #    "test":  "sliding_puzzle_test",
     #},
+    "nqueens_500": {
+        "train": "nqueens_train_500",
+        "test":  "nqueens_test",
+    },
+    "nqueens_1500": {
+        "train": "nqueens_train_1500",
+        "test":  "nqueens_test",
+    },
+    "nqueens_3000": {
+        "train": "nqueens_train_3000",
+        "test":  "nqueens_test",
+    },
 }
 
 

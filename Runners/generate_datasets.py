@@ -78,20 +78,23 @@ save_jsonl(sp_train_z, f"../Data/Train/sliding_puzzle_train_{size_z}")
 save_jsonl(sp_test, "../Data/Test/sliding_puzzle_test")
 
 
-
-nq_train_x, nq_test_x, nq_train_y, nq_test_y, nq_train_z, nq_test_z = generate_nqueens_dataset(
-    firstSplit=size_x, 
-    secondSplit=size_y, 
-    thirdSplit=size_z, 
-    amountForTesting=test_size,
-
-    randomSeed=seed,
-
-    minimumN=4, 
-    logProgress=True,
+nq_test, nq_train_x, nq_train_y, nq_train_z = generate_nqueens_dataset(
+    num_examples=num_examples,
+    min_n=4,
+    max_n=10,
+    min_future_steps=1,
+    max_future_steps=4,
+    num_shots=0,
+    num_fewshot_examples=3,
+    test_size=test_size,
+    size_x=size_x,
+    size_y=size_y,
+    size_z=size_z,
+    seed=seed,
+    max_solutions_per_n=512,
 )
 
 save_jsonl(nq_train_x, f"../Data/Train/nqueens_train_{size_x}")
 save_jsonl(nq_train_y, f"../Data/Train/nqueens_train_{size_y}")
 save_jsonl(nq_train_z, f"../Data/Train/nqueens_train_{size_z}")
-# save_jsonl(nq_test_x, "../Data/Test/nqueens_test_x")
+save_jsonl(nq_test, "../Data/Test/nqueens_test")
