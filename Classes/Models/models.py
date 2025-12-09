@@ -395,21 +395,21 @@ class BaseModel:
         metrics = trainer.evaluate()
         return metrics
 
-    def evaluate_with_predictions(self, model, tokenizer, test_ds, save_name: str):
+    def evaluate_with_predictions(self, model, tokenizer, test_ds, save_name: str, baseline: bool):
         """Runs HF evaluate + saves prediction file + summary file."""
         hf_metrics = self.evaluate_model(model, tokenizer, test_ds, save_name)
         prediction_metrics = self.save_predictions(
-            model, tokenizer, test_ds, save_name
+            model, tokenizer, test_ds, save_name, baseline
         )
 
         return {**hf_metrics, **prediction_metrics}
 
     def evaluate_base_model(self, test_ds, save_name: str = "base_eval"):
         model, tokenizer = self.load_base_model()
-        return self.evaluate_with_predictions(model, tokenizer, test_ds, save_name)
+        return self.evaluate_with_predictions(model, tokenizer, test_ds, save_name, baseline=True)
 
     def evaluate_tuned_model(self, model, tokenizer, test_ds, save_name="tuned_eval"):
-        return self.evaluate_with_predictions(model, tokenizer, test_ds, save_name)
+        return self.evaluate_with_predictions(model, tokenizer, test_ds, save_name, baseline=False)
 
     # ---------------------------------------------------------
     # 7) optuna run for 5 folds
@@ -537,7 +537,7 @@ class BaseModel:
             )["accuracy"]
         }
 
-    def save_predictions(self, model, tokenizer, test_ds, save_name="base_eval"):
+    def save_predictions(self, model, tokenizer, test_ds, save_name="base_eval", baseline=False):
         """
         Generates per-example predictions and saves:
         1) predictions file (JSONL)
@@ -568,7 +568,11 @@ class BaseModel:
             #    prompt: <|im_start|>user ... <|im_end|>\n<|im_start|>assistant\n
             #    then we append "<SOL>\n" as in tokenize_dataset()
             # ==========
-            gen_prompt = prompt + "\n<SOL>\n"
+            if baseline:
+                gen_prompt = prompt.replace("<|im_start|>assistant", "<|im_start|>assistant\n<SOL>")
+            else:
+                gen_prompt = prompt + "\n<SOL>\n"
+
             enc = tokenizer(gen_prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = enc.input_ids.to(model.device)
             attention_mask = enc.attention_mask.to(model.device)
@@ -582,7 +586,7 @@ class BaseModel:
                 output_ids = model.generate(
                     input_ids,
                     attention_mask=attention_mask,
-                    max_new_tokens=horizon_k+5,
+                    max_new_tokens=horizon_k+15,
                     do_sample=False,  # greedy
                     temperature=0.0,
                     eos_token_id=tokenizer.eos_token_id,
@@ -593,6 +597,7 @@ class BaseModel:
 
             # NOTE: keep special tokens in decode so we can cut on <|im_end|> if needed
             raw = tokenizer.decode(gen_ids, skip_special_tokens=False)
+            full_output = tokenizer.decode(output_ids, skip_special_tokens=False)
             pred_only = clean_generation(raw)
 
             # ==========
@@ -613,6 +618,7 @@ class BaseModel:
                 {
                     "prompt": prompt,
                     "target": target,
+                    "prediction_full": full_output,
                     "prediction_raw": raw,
                     "prediction_clean": pred_only,
                     "prediction_used": pred_lines,
@@ -636,6 +642,10 @@ class BaseModel:
             json.dump(summary, f, indent=4, ensure_ascii=False)
 
         print(f"[BaseModel] Saved metrics → {summary_path}")
-        print("RAW MODEL OUTPUT (last example):\n", pred_only)
+        if baseline:
+            print("RAW MODEL OUTPUT (last example):\n", results[-1]["prediction_raw"])
+        else:
+            print("RAW MODEL OUTPUT (last example):\n", results[-1]["prediction_full"])
+
 
         return summary

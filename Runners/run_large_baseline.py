@@ -1,9 +1,16 @@
-from Classes.Models.qwen5b import Qwen5B
-from Classes.Utils.data_utils import load_jsonl
-from datasets import Dataset
-import os
+# baseline_gptoss120b.py
 
-test_dir = './Data/Test/'
+import os
+from dataclasses import dataclass
+
+from datasets import Dataset
+from Classes.Utils.data_utils import load_jsonl
+
+# your OpenRouter wrapper
+from Classes.Models.gptoss120b import GPTOSS120B
+
+
+test_dir = "./Data/Test/"
 
 # ---- Baseline tasks: only test files ----
 TASKS = {
@@ -27,22 +34,24 @@ for task_name, test_file in TASKS.items():
     print(f"  • Loading {task_name} test from {test_path}")
     test_sets[task_name] = load_dataset(test_path)
 
-print("\nCreating Qwen5B (base model)")
-model = Qwen5B()
+print("\nCreating GPTOSS120B (OpenRouter API model)")
+model = GPTOSS120B()
 
 
 def process_task_baseline(task_name, test_ds):
-    print(f"\n=== Baseline evaluation for task: {task_name} ===")
+    print(f"\n=== Baseline evaluation (OpenRouter) for task: {task_name} ===")
 
-    # use base model only, no training / tuning
-    metrics_base = model.evaluate_base_model(
+    # just inference via OpenRouter, no training/tuning
+    metrics_base = model.evaluate_api_model(
         test_ds=test_ds,
-        save_name=f"{task_name}_baseline"
+        save_name=f"{task_name}_gptoss120b",
     )
 
-    print("Base model metrics:", metrics_base)
-    print("HF Eval Loss:", metrics_base.get("eval_loss"))
+    print("Baseline metrics:", metrics_base)
+    # ApiModel summary only has accuracy + total_examples
     print("Sequence-Level Accuracy:", metrics_base.get("accuracy"))
+    # eval_loss will be None for API models; printed here for consistency
+    print("HF Eval Loss (API, None):", metrics_base.get("eval_loss"))
 
     return metrics_base
 
@@ -53,6 +62,6 @@ results = {}
 for task in TASKS:
     results[task] = process_task_baseline(task, test_sets[task])
 
-print("\nAll baseline results:")
+print("\nAll baseline results (GPTOSS120B via OpenRouter):")
 for task, metrics in results.items():
     print(f"  {task}: {metrics}")
