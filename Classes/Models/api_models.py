@@ -5,6 +5,10 @@ from typing import Any, Dict, Optional
 
 import requests
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# load .env file once when this module is imported
+load_dotenv()
 
 
 # -----------------------------
@@ -102,14 +106,14 @@ class ApiModelConfig:
 
     Example:
         ApiModelConfig(
-            model_name="openai/gpt-oss-120b:free"
+            model_name="qwen/qwen-2.5-72b-instruct"
         )
     """
-    model_name: str  # e.g. "openai/gpt-oss-120b:free"
+    model_name: str  # e.g. "qwen/qwen-2.5-72b-instruct"
 
     # generation settings
     temperature: float = 0.0
-    max_new_tokens: int = 256
+    max_new_tokens: int = 64   # good default for your N-Queens task
 
     # OpenRouter API settings
     base_url: str = "https://openrouter.ai/api/v1"
@@ -137,8 +141,8 @@ class ApiModel:
         if not self.api_key:
             raise RuntimeError(
                 f"{cfg.api_key_env} is not set. "
-                "Export your OpenRouter API key, e.g.\n"
-                "  export OPENROUTER_API_KEY='sk-...'"
+                "Set it in your environment or .env file, e.g.\n"
+                "  OPENROUTER_API_KEY='sk-...'"
             )
 
     # keep same directory structure style as your BaseModel
@@ -152,6 +156,7 @@ class ApiModel:
         """
         Send a single prompt to OpenRouter and return the assistant text.
         Uses Chat Completions API with a single user message.
+        This matches the working standalone script.
         """
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -174,7 +179,14 @@ class ApiModel:
         }
 
         url = f"{self.cfg.base_url}/chat/completions"
-        resp = requests.post(url, headers=headers, json=payload, timeout=120)
+
+        resp = requests.post(
+            url,
+            headers=headers,
+            json=payload,   # same as your working script
+            timeout=120,
+        )
+
         resp.raise_for_status()
         data = resp.json()
 
@@ -193,7 +205,7 @@ class ApiModel:
         2) metrics summary file (JSON)
 
         Assumes each row in test_ds has:
-            - row["prompt"] : full chat-style prompt string
+            - row["prompt"] : full chat-style prompt string with <|im_start|>user, etc.
             - row["target"] : gold answer string (possibly multi-line)
         """
         out_dir = f"{self.task_dir(save_name)}/metrics"
@@ -212,11 +224,13 @@ class ApiModel:
             prompt = row["prompt"]
             target = row["target"]
 
-            # Match your baseline behavior: insert <SOL> just before assistant
-            # <|im_start|>assistant\n<SOL>
-            gen_prompt = prompt.replace(
-                "<|im_start|>assistant",
-                "<|im_start|>assistant\n<SOL>"
+            # Convert your HF-style prompt into the plain user message
+            # This mirrors the working N-Queens test script.
+            gen_prompt = (
+                prompt.replace("<|im_start|>user", "")
+                      .replace("<|im_start|>assistant", "")
+                      .replace("<|im_end|>", "")
+                      .strip()
             )
 
             gold_norm = normalize_target_text(target)
@@ -236,10 +250,10 @@ class ApiModel:
 
             correct_count += is_correct
 
-            # raw == model's output, pred_only == cleaned version
             results.append(
                 {
                     "prompt": prompt,
+                    "sent_prompt": gen_prompt,   # what we actually sent
                     "target": target,
                     "prediction_raw": raw,
                     "prediction_clean": pred_only,

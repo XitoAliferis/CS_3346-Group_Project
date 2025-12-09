@@ -356,6 +356,7 @@ def evaluate_task(task_name: str):
 # RUN MULTIPLE TASKS
 # =============================
 TASKS = [
+    "hanoi_Qwen72B",
     "hanoi_baseline",
     "hanoi_500_test_500_examples",
     "hanoi_1500_test_1500_examples",

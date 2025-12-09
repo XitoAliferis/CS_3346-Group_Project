@@ -1,0 +1,10 @@
+{
+    "exact_match": 0.15333333333333332,
+    "relative_accuracy": 0.30777777777777743,
+    "syntax_accuracy": 0.9833333333333333,
+    "edit_similarity": 0.5563809523809521,
+    "first_error_position": 1.54,
+    "row_range_validity": 0.0,
+    "conflict_pair_rate": 0.07793121693121693,
+    "conflict_free_prefix_rate": 0.36888888888888877
+}

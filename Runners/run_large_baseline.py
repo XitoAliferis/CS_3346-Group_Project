@@ -1,5 +1,3 @@
-# baseline_gptoss120b.py
-
 import os
 from dataclasses import dataclass
 
@@ -7,7 +5,7 @@ from datasets import Dataset
 from Classes.Utils.data_utils import load_jsonl
 
 # your OpenRouter wrapper
-from Classes.Models.gptoss120b import GPTOSS120B
+from Classes.Models.qwen72b import Qwen72B
 
 
 test_dir = "./Data/Test/"
@@ -34,8 +32,8 @@ for task_name, test_file in TASKS.items():
     print(f"  • Loading {task_name} test from {test_path}")
     test_sets[task_name] = load_dataset(test_path)
 
-print("\nCreating GPTOSS120B (OpenRouter API model)")
-model = GPTOSS120B()
+print("\nCreating Qwen72B (OpenRouter API model)")
+model = Qwen72B()
 
 
 def process_task_baseline(task_name, test_ds):
@@ -44,7 +42,7 @@ def process_task_baseline(task_name, test_ds):
     # just inference via OpenRouter, no training/tuning
     metrics_base = model.evaluate_api_model(
         test_ds=test_ds,
-        save_name=f"{task_name}_gptoss120b",
+        save_name=f"{task_name}_Qwen72B",
     )
 
     print("Baseline metrics:", metrics_base)
@@ -62,6 +60,6 @@ results = {}
 for task in TASKS:
     results[task] = process_task_baseline(task, test_sets[task])
 
-print("\nAll baseline results (GPTOSS120B via OpenRouter):")
+print("\nAll baseline results (Qwen72B via OpenRouter):")
 for task, metrics in results.items():
     print(f"  {task}: {metrics}")

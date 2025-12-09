@@ -296,6 +296,7 @@ def evaluate_task(task_name: str):
 # RUN MULTIPLE TASKS
 # =============================
 TASKS = [
+    "fibonacci_Qwen72B",
     "fibonacci_baseline",
     "fibonacci_500_test_500_examples",
     "fibonacci_1500_test_1500_examples",

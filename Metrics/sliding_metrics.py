@@ -366,6 +366,7 @@ def evaluate_task(task_name: str):
 # RUN MULTIPLE TASKS
 # =============================
 TASKS = [
+    "sliding_puzzle_Qwen72B",
     "sliding_puzzle_baseline",
     "sliding_puzzle_500_test_500_examples",
     "sliding_puzzle_1500_test_1500_examples",

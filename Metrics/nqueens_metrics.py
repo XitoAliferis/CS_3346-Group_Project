@@ -285,6 +285,7 @@ def evaluate_task(task_name: str):
 # RUN MULTIPLE TASKS
 # =============================
 TASKS = [
+    "nqueens_Qwen72B",
     "nqueens_baseline",
     "nqueens_500_test_500_examples",
     "nqueens_1500_test_1500_examples",
